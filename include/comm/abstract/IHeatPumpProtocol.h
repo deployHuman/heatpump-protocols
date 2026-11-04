@@ -43,7 +43,9 @@ public:
     virtual CommunicationError sendCommand(const std::string& command, std::string& response) = 0;
 };
 
-class IHeatPumpProtocol : public IHeatPumpReader {
+class IHeatPumpProtocol : public IHeatPumpReader,
+                          public IHeatPumpWriter,
+                          public IHeatPumpCommander {
 public:
     virtual CommunicationError initialize(ICommunicationBus* bus) = 0;
     virtual CommunicationError shutdown() = 0;

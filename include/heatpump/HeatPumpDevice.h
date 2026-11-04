@@ -18,7 +18,7 @@ public:
                    std::unique_ptr<IHeatPumpProtocol> protocol)
         : m_bus(std::move(bus))
         , m_protocol(std::move(protocol))
-        , m_modelInfo(HeatPumpModelInfo::unknown()) {}
+        , m_modelInfo(m_protocol ? m_protocol->getModelInfo() : HeatPumpModelInfo::unknown()) {}
 
     HeatPumpDevice(HeatPumpDevice&&) = default;
     HeatPumpDevice& operator=(HeatPumpDevice&&) = default;
