@@ -1,0 +1,82 @@
+{
+  "description": "Checksum, frame, and sensor vectors for the heat pump communication library",
+  "version": "1.0",
+
+  "checksum_vectors": {
+    "xor8": [
+      {"data": "0206000003", "expected": "07", "description": "Rego 800 ident command checksum"},
+      {"data": "0206000203", "expected": "05", "description": "Rego 800 read register 0x0002 checksum"},
+      {"data": "0206000A03", "expected": "0D", "description": "Rego 800 read register 0x000A checksum"},
+      {"data": "", "expected": "00", "description": "Empty data"}
+    ],
+    "crc16_modbus": [
+      {"data": "010300000002", "expected": "0BC4", "description": "Read holding registers (uint16 LE)"},
+      {"data": "010600000001", "expected": "0A48", "description": "Write single register (uint16 LE)"},
+      {"data": "", "expected": "FFFF", "description": "Empty data"},
+      {"data": "00", "expected": "40BF", "description": "Single zero byte"}
+    ],
+    "crc8": [
+      {"data": "0206000003", "expected": "B9", "description": "Rego ident CRC8"}
+    ]
+  },
+
+  "frame_vectors": {
+    "rego800_read_temp_register_0x0000": {
+      "description": "Send query command, receive temperature response for outdoor sensor",
+      "tx": "0206000003",
+      "tx_checksum": "07",
+      "rx": "020602EC00EA",
+      "expected_sensor": "outdoor_temp",
+      "expected_raw_value": 236,
+      "expected_float_value": -26.4
+    },
+    "rego800_read_register_0x0010": {
+      "description": "Read compressor speed register",
+      "tx": "0206001003",
+      "tx_checksum": "17",
+      "rx": "020602F000F6",
+      "expected_sensor": "compressor_speed",
+      "expected_raw_value": 240,
+      "expected_float_value": 240.0
+    },
+    "rego800_read_power_register_0x0012": {
+      "description": "Read heat power register",
+      "tx": "0206001203",
+      "tx_checksum": "15",
+      "rx": "020602640062",
+      "expected_sensor": "heat_power",
+      "expected_raw_value": 100,
+      "expected_float_value": 10.0
+    }
+  },
+
+  "sensor_mappings_rego800": [
+    {"id": 0, "name": "outdoor_temp", "display_name": "Outdoor Temperature", "type": "TEMPERATURE", "unit": "CELSIUS", "register": "0x0000", "data_length": 2, "scale": 0.1, "offset": -50.0, "writable": false},
+    {"id": 1, "name": "supply_line_temp", "display_name": "Supply Line Temperature", "type": "TEMPERATURE", "unit": "CELSIUS", "register": "0x0002", "data_length": 2, "scale": 0.1, "offset": -50.0, "writable": false},
+    {"id": 2, "name": "return_line_temp", "display_name": "Return Line Temperature", "type": "TEMPERATURE", "unit": "CELSIUS", "register": "0x0004", "data_length": 2, "scale": 0.1, "offset": -50.0, "writable": false},
+    {"id": 3, "name": "hot_water_temp", "display_name": "Hot Water Temperature", "type": "TEMPERATURE", "unit": "CELSIUS", "register": "0x0006", "data_length": 2, "scale": 0.1, "offset": 0.0, "writable": false},
+    {"id": 4, "name": "brine_in_temp", "display_name": "Brine In Temperature", "type": "TEMPERATURE", "unit": "CELSIUS", "register": "0x0008", "data_length": 2, "scale": 0.1, "offset": -50.0, "writable": false},
+    {"id": 5, "name": "brine_out_temp", "display_name": "Brine Out Temperature", "type": "TEMPERATURE", "unit": "CELSIUS", "register": "0x000A", "data_length": 2, "scale": 0.1, "offset": -50.0, "writable": false},
+    {"id": 6, "name": "compressor_speed", "display_name": "Compressor Speed", "type": "SPEED", "unit": "HERTZ", "register": "0x0010", "data_length": 2, "scale": 1.0, "offset": 0.0, "writable": false},
+    {"id": 7, "name": "heat_power", "display_name": "Heat Power", "type": "POWER", "unit": "KILOWATT", "register": "0x0012", "data_length": 2, "scale": 0.1, "offset": 0.0, "writable": false}
+  ],
+
+  "rego800_write_commands": [
+    {"hex": "0B90FF00FF01AF", "description": "Write command variant 1"},
+    {"hex": "0B90FF00FF01B9", "description": "Write command variant 2"},
+    {"hex": "0B90FF00FF0392", "description": "Write command variant 3"},
+    {"hex": "0B90FF00FF01F5", "description": "Write command variant 4"},
+    {"hex": "0B90FF00FF01BA", "description": "Write command variant 5"}
+  ],
+
+  "protocol_detection_strings": {
+    "rego800": ["Rego 800", "IVT Rego 800"],
+    "rego600": ["Rego 2-3000", "Pro Ctrl 600"],
+    "rego1000": ["Rego 1000", "Pro Control 500"],
+    "nibe_eb100": ["EB100", "NIBE EB100"],
+    "nibe_styr2002": ["STYR2002", "NIBE Styr2002"],
+    "nibe_fighter": ["Fighter 1230/1235/1220", "Fighter 1130/1135/1140"],
+    "thermia_diplomat": ["Thermia Diplomat"],
+    "thermia_villa": ["Thermia Villa Classic"]
+  }
+}
