@@ -108,6 +108,25 @@ namespace Thermia {
     constexpr float    TEMP_OFFSET  = -50.0f;
 }
 
+namespace ThermiaGenesis {
+    constexpr uint8_t  SLAVE_ADDRESS         = 0x01;
+    constexpr uint8_t  READ_INPUT_REGISTERS  = 0x04;
+    constexpr uint8_t  READ_HOLDING_REGISTERS = 0x03;
+    constexpr uint8_t  WRITE_HOLDING_REGISTER = 0x06;
+    constexpr size_t   RESPONSE_BUFFER_RESERVE = 256;
+    constexpr size_t   MAX_REGISTERS         = 200;
+    constexpr uint16_t VERSION_MAJOR_REG     = 311; // 30312
+    constexpr uint16_t VERSION_MINOR_REG     = 312; // 30313
+    constexpr uint16_t VERSION_MICRO_REG     = 313; // 30314
+
+    using namespace std::chrono_literals;
+    constexpr auto     READ_TIMEOUT = std::chrono::milliseconds(2000);
+    constexpr auto     WRITE_TIMEOUT = std::chrono::milliseconds(2000);
+
+    constexpr float    TEMP_SCALE   = 0.01f;
+    constexpr float    TEMP_OFFSET  = 0.0f;
+}
+
 namespace EmsBosch {
     constexpr size_t   RESPONSE_BUFFER_RESERVE = 256;
     constexpr size_t   MAX_REGISTERS = 90;

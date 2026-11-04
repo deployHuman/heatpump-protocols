@@ -19,6 +19,7 @@ struct SensorMapping {
     float scale;
     float offset;
     bool writable;
+    uint8_t readFunction = 0x03;
 };
 
 class SensorCatalog {

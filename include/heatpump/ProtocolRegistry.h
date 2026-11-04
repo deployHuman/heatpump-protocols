@@ -10,6 +10,7 @@
 #include "comm/protocol/ivt/IvtRego800Protocol.h"
 #include "comm/protocol/nibe/NibeEB100Protocol.h"
 #include "comm/protocol/nibe/NibeStyr2002Protocol.h"
+#include "comm/protocol/thermia/ThermiaGenesisProtocol.h"
 #include "comm/protocol/thermia/ThermiaProtocol.h"
 #include "heatpump/HeatPumpDetector.h"
 
@@ -51,9 +52,14 @@ inline void registerAllProtocols(HeatPumpDetector& detector) {
         "Bosch EMS / ProControl");
 
     detector.registerProtocol(
+        HeatPumpProtocol::THERMIA_GENESIS,
+        [] { return std::make_unique<ThermiaGenesisProtocol>(); },
+        "Thermia Atlas / Calibra / Diplomat Inverter (Genesis)");
+
+    detector.registerProtocol(
         HeatPumpProtocol::THERMIA_DIPLOMAT,
         [] { return std::make_unique<ThermiaProtocol>(); },
-        "Thermia Diplomat / Villa Classic / Genesis");
+        "Thermia Diplomat / Villa Classic (Rego-style map)");
 
     detector.registerProtocol(
         HeatPumpProtocol::GENERIC,

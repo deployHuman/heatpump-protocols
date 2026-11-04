@@ -21,6 +21,7 @@ enum class HeatPumpProtocol : uint8_t {
     IVT_REGO5200,
     BOSCH_EMS_PROCONTROL,
     THERMIA_DIPLOMAT,
+    THERMIA_GENESIS,
     GENERIC,
 };
 
