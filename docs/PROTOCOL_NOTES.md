@@ -6,13 +6,20 @@ command handlers in `include/heatpump/commands/`.
 
 ## Values and units
 
-- Temperature values are 16-bit little-endian with scale `0.1`. Most mappings
+- Pump-side protocols in this repository use 16-bit little-endian values with
+  scale `0.1`. Modbus protocols use big-endian registers;
+  `ThermiaGenesisProtocol` uses `ModbusSensorParser` for that layout.
+- Temperature values in the pump-side maps use scale `0.1`. Most mappings
   use offset `-50.0`, so raw `0` means `-50.0 C`. Hot water and some room
   sensors use offset `0.0`. Always read the `SensorMapping` instead of
   assuming one formula for every temperature.
-- Heating setpoints convert as `raw = (tempC + 50) * 10`. Hot water setpoints
-  convert as `raw = tempC * 10`. Using the wrong formula writes a value that
-  is tens of degrees off.
+- The Thermia Genesis map uses scale `0.01` (`raw = tempC * 100`), not the
+  Rego-style `+50`/`*10` formulas.
+- Heating setpoints convert as `raw = (tempC + 50) * 10` in the pump-side
+  handlers; hot water setpoints convert as `raw = tempC * 10`. The extended
+  bridge handlers default to `raw = tempC * 10`; use
+  `BridgeTemperatureEncoding::PumpRawOffset50` if a read shows the pump-raw
+  value. See `docs/RESEARCH_JOURNAL.md` for the two-value check.
 - Power values use scale `0.1` (kW). Energy values use scale `0.001` (kWh) and
   are 32-bit little-endian. Runtime values are 32-bit hours. Do not read
   4-byte values as 16-bit.
@@ -46,18 +53,36 @@ command handlers in `include/heatpump/commands/`.
 - For critical writes, install `setReadBackCallback()` so `writeAndVerify()`
   re-reads the register after the acknowledgment. Some pumps acknowledge a
   write before applying it.
+- The extended handlers in `include/heatpump/commands/*ExtendedCommandHandler.h`
+  and `ThermiaGenesisCommandHandler.h` use bridge register maps. They are
+  opt-in and do not change the default wire bytes.
+- Raw write helpers are available when a register is not covered by a typed
+  method. See `docs/RESEARCH_JOURNAL.md` for the register tables and their
+  verification status.
 
 ## Rego family
 
 - Read request: `02 06 regHi regLo 03 xor8`.
 - Write request: `0B 90 FF regHi regLo valHi valLo xor8`.
-- Rego 800/600 are read-only in the current mappings; Rego 1000/5200 support
-  writes.
+- Rego 800/600 are read-only in the default pump-side mappings; Rego 1000/5200
+  support writes. The opt-in extended handlers can write the documented
+  Rego 600/800 registers when the controller firmware allows it.
 - Rego 5200 runs at 115200 baud. Rego 800/600/1000 default to 9600.
 - Rego 600 responses can be textual (`key=value,...`) rather than binary.
   Do not assume every Rego model returns the same frame layout.
 - Some IVT Rego service ports use inverted TTL. Set `BusConfig::inverted` and
   make sure the bus adapter applies `uart_set_line_inverse()`.
+- The direct Rego 6xx service port uses a different transport and frame format;
+  the `0B 90 FF ...` frame in this library is a bridge/UART abstraction. Direct
+  Rego 800/1000 service is also a different bus. Confirm whether your hardware
+  is a direct port or a bridge PCB before choosing a handler.
+- `Rego600ExtendedCommandHandler` and `Rego1000ExtendedCommandHandler` use the
+  extended bridge register numbering. Do not mix those registers with the
+  default simplified catalogs.
+- The extended handlers default to plain bridge tenths (`tempC * 10`). Use
+  `BridgeTemperatureEncoding::PumpRawOffset50` only when a read confirms the
+  pump-raw `+50` value. See `docs/RESEARCH_JOURNAL.md` for the verification
+  steps.
 
 ## NIBE EB100 / Styr2002
 
@@ -68,26 +93,48 @@ command handlers in `include/heatpump/commands/`.
   `38 10 FF 00 03 7B 00 00`.
 - NIBE uses a longer read timeout (3 s). Do not reuse the 500 ms Rego timeout.
 - STYR2002 mode persistence needs an `IFileStorage` via `setFileStorage()`.
+- `NibeEb100ExtendedCommandHandler` writes 16-bit registers as
+  `38 10 FF 00 03 2B regLo regHi valLo valHi`. The payload length is
+  UNVERIFIED against an EB100 capture. Use `writeRegister16Raw()` for a bridge
+  that expects a different length. Its temperature encoding defaults to the
+  documented bridge value (`tempC * 10`); switch to `PumpRawOffset50` only after
+  confirming one read.
 
 ## Bosch EMS / ProControl
 
 - Read is `DC 01 regHi regLo len xor8`; write is `DC 02 ...`.
 - Do not use the write form for reads.
 - EMS has its own poll cadence and a smaller register set than NIBE.
+- EMS uses a different telegram layout from the bridge-style `0x32xx`
+  registers. The `0x32xx` registers used by `EmsCommandHandler` are
+  bridge-specific and have not been matched to the heat-pump telegram types
+  yet. See `docs/RESEARCH_JOURNAL.md` for the source list and open questions.
 
 ## Thermia / Modbus RTU
 
-- Read function is `0x03`; write function is `0x06`.
+- The default `ThermiaProtocol` uses function `0x03` for reads and `0x06` for
+  writes, with a 5-poll cycle delay and a disable after 3 consecutive errors.
+- `ThermiaGenesisProtocol` uses the official Genesis map: function `0x04` for
+  input-register telemetry, function `0x03` for holding-register setpoints, and
+  function `0x06` for writes. It does not use the old Rego-style cycle delay.
 - CRC is CRC16 Modbus, transmitted low byte first.
 - Default slave address is `0x01`.
-- The implementation inserts a 5-poll cycle delay and disables the protocol
-  after 3 consecutive errors. Do not poll it like a Rego device.
-- A Modbus write response is an 8-byte echo. If your command path reads only a
-  single ACK byte, drain the rest before the next transaction.
+- A Modbus write response is an 8-byte echo. `ThermiaCommandHandler`,
+  `ThermiaGenesisCommandHandler`, and `ThermiaGenesisProtocol` validate the
+  echo and CRC before reporting success.
+- `ThermiaGenesisCommandHandler` uses the official Thermia Mega/Genesis
+  coils and holding registers (`40001+`). Coil addresses are the wire/reference
+  addresses (de-facto minus 1); holding registers use de-facto minus 40001.
+  The default `ThermiaCommandHandler` keeps the older Rego-style register map
+  for compatibility. Pick the handler that matches the controller, not the
+  brand label.
 
 ## RC100H
 
 - RC100H is an active CAN emulation, not a normal polled protocol.
+- The RC100H name is also used for a different EMS thermostat protocol. This
+  class emulates a NIBE/IVT-style CAN room controller; do not use it as an EMS
+  RC100H implementation. See `docs/RESEARCH_JOURNAL.md` for the source list.
 - Thermostat frame: `0B 90 FF 00 FF 01` followed by two temperatures and
   humidity, then XOR8.
 - Pairing uses register `0x2F1`; value `0x01` pairs and `0x00` unpairs.
@@ -99,7 +146,10 @@ command handlers in `include/heatpump/commands/`.
 - Register `GenericProtocol` last. Its `detectModel()` always succeeds, so it
   will mask every protocol registered after it.
 - Prefer an explicit protocol when the model is known. Auto-detection sends
-  probe frames to the bus.
+  probe frames to the bus. For a Thermia Atlas/Calibra, use
+  `addDeviceByProtocol(THERMIA_GENESIS, ...)` to skip the other probes.
+- `THERMIA_GENESIS` is registered before the older `THERMIA_DIPLOMAT`
+  Rego-style map; keep that order.
 - Rebranded pumps exist: a NIBE-labelled unit can speak the Thermia protocol.
   Detect by response, not by the label on the case.
 - Read timeouts differ: Rego 500 ms, Rego 5200 1 s, Thermia/EMS 2 s, NIBE 3 s.

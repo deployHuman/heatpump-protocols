@@ -25,8 +25,10 @@ main gap for a new user who wants to build a controller.
 3. `docs/COMMANDS.md` — command matrix, wire formats, and register mappings.
 4. `docs/PROTOCOL_NOTES.md` — value encoding, write behavior, detection,
    polling, and electrical gotchas.
-5. `examples/command_example.cpp` — how every command handler is used.
-6. `include/heatpump/ProtocolRegistry.h` — registers all protocol factories.
+5. `docs/RESEARCH_JOURNAL.md` — sources, extended register maps, transport
+   caveats, and the missing-pump backlog.
+6. `examples/command_example.cpp` — how every command handler is used.
+7. `include/heatpump/ProtocolRegistry.h` — registers all protocol factories.
 
 ## Current state and known gaps
 
@@ -34,8 +36,17 @@ Working today:
 
 - All protocol classes and command handlers compile under C++20.
 - `HeatPumpManager` can create a device, detect a protocol, and poll sensors.
-- `registerAllProtocols()` registers the IVT Rego, NIBE, Bosch EMS, Thermia,
-  and generic probe protocols.
+- `registerAllProtocols()` registers the IVT Rego, NIBE, Bosch EMS, Thermia
+  (Rego-style and Genesis), and generic probe protocols.
+- The Thermia Atlas/Calibra Genesis protocol has a focused sensor catalog,
+  Modbus input/holding-register reads, and writable holding-register setpoints.
+- `HeatPumpManager::writeSensor()` works for protocols with writable sensor
+  mappings; the protocol base implements `IHeatPumpWriter` and
+  `IHeatPumpCommander`.
+- Opt-in extended command handlers cover the Rego 600/800/1000 and NIBE EB100
+  bridge register maps and the official Thermia Mega/Genesis Modbus map.
+- `docs/RESEARCH_JOURNAL.md` is the single place for external source links,
+  register tables, transport caveats and missing-pump backlog.
 - Python unit tests and C++ integration tests pass.
 
 Missing for a real controller:
@@ -44,10 +55,10 @@ Missing for a real controller:
 - A minimal ESP32 application that initializes a bus, registers protocols,
   polls sensors, and sends commands.
 - A sensor reference document (the sensor catalogs are currently in headers).
-- Wiring an actual command handler to `HeatPumpDevice`/`HeatPumpManager`
-  convenience APIs. `HeatPumpDevice::sendCommand()` only works for protocols
-  that implement `IHeatPumpCommander`; the current protocol classes do not.
-  Use the handlers in `include/heatpump/commands/` directly.
+- A command-handler convenience layer. `sendCommand()` returns
+  "Commands not supported" unless a protocol overrides `doSendCommand()`.
+  Complex command sequences still use the handlers in
+  `include/heatpump/commands/`.
 
 ## Repository layout
 
@@ -56,7 +67,7 @@ include/
   comm/
     abstract/       ICommunicationBus, IHeatPumpProtocol
     frame/          frame, parser, XOR8/CRC16 validators
-    sensor/         sensor catalog, registry, parsers
+    sensor/         sensor catalog, registry, little-endian and Modbus parsers
     protocol/       Rego, NIBE, EMS, Thermia, generic protocols
     emulation/      RC100H CAN thermostat emulation
     storage/        IFileStorage
@@ -133,6 +144,11 @@ const BusConfig& getConfig() const;
 
 `GenericProtocol` must stay last in the detector order because its
 `detectModel()` always succeeds.
+
+`SensorMapping::readFunction` selects the Modbus read function (`0x03` holding,
+`0x04` input). `ThermiaGenesisProtocol` uses it; the pump-side protocols ignore
+it. Modbus values are big-endian; use `ModbusSensorParser`, not the older
+little-endian parser, for Modbus telemetry.
 
 ## Implementing an ESP32 bus
 
@@ -233,6 +249,10 @@ Typed helpers accept degrees Celsius directly.
 5. Add a sensor reference document generated from the sensor catalogs.
 6. Optionally add a command-handler factory so `HeatPumpDevice` can expose
    commands without callers constructing each handler manually.
+7. Add a new protocol family from the backlog in `docs/RESEARCH_JOURNAL.md`
+   (Viessmann Optolink, Mitsubishi CN105, Panasonic CN-CNT, or Stiebel Eltron
+   Elster CAN), or extend `ThermiaGenesisProtocol` to the full v17.1 address
+   list. Add mock-bus frame tests before hardware testing.
 
 ## Conventions and guardrails
 
@@ -247,6 +267,12 @@ Typed helpers accept degrees Celsius directly.
 - Keep the public repository self-contained and product-neutral. Do not add
   private paths, credentials, third-party binaries, or references to
   non-public development material.
+- Put every external source link, vendor document name, or PDF reference only
+  in `docs/RESEARCH_JOURNAL.md`. Other files should refer to that journal
+  instead of linking externally.
+- Mark new protocol data with its verification status: verified against a
+  capture/document, or unverified. Prefer recording unverified findings in the
+  research journal over omitting them.
 - Do not commit build output, `.pio/`, `build/`, `__pycache__/`, or generated
   binaries.
 - Logging: no secrets, WiFi passwords, MQTT credentials, or raw user data.

@@ -27,9 +27,41 @@ The library exposes two command styles:
 | `SET_THERMOSTAT_MODE` | `Rc100H::Mode` value | - | - |
 | `RESET_ALARM` | `1` | - | - |
 
-Setpoint conversion is `raw = (tempC + 50) / 0.1` for heating circuits and
-`raw = tempC / 0.1` for hot water on the Rego, NIBE, EMS, and Thermia handlers.
-The typed helpers apply these conversions for you.
+Setpoint conversion in the default pump-side handlers is `(tempC + 50) * 10`
+for heating circuits and `tempC * 10` for hot water. The extended bridge
+handlers default to the documented bridge encoding `tempC * 10`; construct
+them with `BridgeTemperatureEncoding::PumpRawOffset50` if a read shows the
+pump-raw `(tempC + 50) * 10` value. The typed helpers apply the conversion
+for you.
+
+## Extended / bridge register handlers
+
+The default handlers use the simplified register maps that were originally
+implemented in this repository. When a heat pump is reached through a bridge or
+a similar inverter/service PCB, use the opt-in extended handlers instead. They
+send the documented bridge registers while the default register maps stay
+unchanged.
+
+| Header | Handler | Register map |
+|---|---|---|
+| `heatpump/commands/Rego600ExtendedCommandHandler.h` | `Rego600ExtendedCommandHandler` | Rego 600 extended map |
+| `heatpump/commands/Rego800ExtendedCommandHandler.h` | `Rego800ExtendedCommandHandler` | Rego 800 extended map |
+| `heatpump/commands/Rego1000ExtendedCommandHandler.h` | `Rego1000ExtendedCommandHandler` | Rego 1000 extended map |
+| `heatpump/commands/NibeEb100ExtendedCommandHandler.h` | `NibeEb100ExtendedCommandHandler` | NIBE EB100 extended map |
+| `heatpump/commands/ThermiaGenesisCommandHandler.h` | `ThermiaGenesisCommandHandler` | Thermia Mega/Genesis Modbus |
+
+The rationale, full register tables, transport caveats and verification status
+are in [`docs/RESEARCH_JOURNAL.md`](RESEARCH_JOURNAL.md). The extended handlers
+assume a bridge/UART register interface and are not direct service-port frame
+implementations. The extended handlers default to the documented bridge
+temperature encoding; the NIBE EB100 16-bit write frame is still unverified.
+
+Raw write helpers are also available on the existing handlers:
+
+- `RegoCommandHandler::writeRegister()` / `writeRegisterRaw()`
+- `NibeCommandHandler::writeRegister()` / `writeRegister16()` / `writeRegister16Raw()`
+- `EmsCommandHandler::writeRegister()`
+- `ThermiaCommandHandler::writeRegister()`
 
 ## Rego family
 
@@ -125,6 +157,12 @@ DC 02 regHi regLo dataLen valHi valLo xor8
 Acknowledgment: `0x06` = accepted, `0x15` = rejected.
 
 ## Thermia (Modbus RTU)
+
+The table below is the default Rego-style Thermia handler. For Atlas, Calibra,
+Calibra E, Calibra Cool, Calibra RXT, and Diplomat Inverter, use
+`ThermiaGenesisProtocol` for sensors and `ThermiaGenesisCommandHandler` for
+commands. The Genesis map uses the official Thermia coil and holding-register
+addresses and a `tempC * 100` temperature scale.
 
 Thermia uses standard Modbus function `0x06` (write single register):
 

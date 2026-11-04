@@ -23,7 +23,8 @@ into the protocol layer.
 | NIBE | EB100 | UART | `NIBE_EB100` |
 | NIBE | Styr2002 | UART | `NIBE_STYR2002` |
 | Bosch / IVT | EMS / ProControl | UART | `BOSCH_EMS_PROCONTROL` |
-| Thermia | Diplomat / Villa Classic / Genesis | Modbus RTU | `THERMIA_DIPLOMAT` |
+| Thermia | Atlas / Calibra / Calibra E / Calibra Cool / Calibra RXT / Diplomat Inverter | Modbus RTU | `THERMIA_GENESIS` |
+| Thermia | Diplomat / Villa Classic (Rego-style map) | Modbus RTU | `THERMIA_DIPLOMAT` |
 | NIBE (rebranded Thermia) | Fighter 1130/1135/1140/1230/1235/1220 | Modbus RTU | `THERMIA_DIPLOMAT` |
 | NIBE | RC100H thermostat emulation | CAN | `RC100H` emulation |
 
@@ -42,7 +43,19 @@ Write support depends on the heat pump model and configuration. Check
   alarm reset, and timed register writes.
 - RC100H CAN thermostat emulation with pairing, room temperature, humidity, and
   dial range control.
+- Opt-in extended command handlers for bridge register maps (Rego 600,
+  Rego 800, Rego 1000, NIBE EB100) and the official Thermia Mega/Genesis
+  Modbus map.
+- Full Thermia Atlas/Calibra Genesis Modbus protocol with a focused sensor
+  catalog and writable holding-register setpoints.
 - Header-only: no compiled library artifact is required.
+
+## Research notes
+
+`docs/RESEARCH_JOURNAL.md` is the single place for external source links,
+register tables, transport caveats and verification status. It also tracks
+known and new heat pump families that are still missing from the library,
+including their current model names and bus types.
 
 ## Requirements
 
