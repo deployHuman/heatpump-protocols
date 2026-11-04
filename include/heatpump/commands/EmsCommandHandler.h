@@ -77,16 +77,27 @@ public:
         }
     }
 
+    CommunicationError writeRegister(uint16_t regAddr, uint16_t value, uint8_t dataLength = 2) {
+        if (dataLength != 1 && dataLength != 2) {
+            return CommunicationError{CommErrorCode::WRITE_REJECTED,
+                                       "EMS register data length must be 1 or 2", 0};
+        }
+        return writeEmsRegister(regAddr, value, dataLength);
+    }
+
 private:
-    CommunicationError writeEmsRegister(uint16_t regAddr, uint16_t value) {
+    CommunicationError writeEmsRegister(uint16_t regAddr, uint16_t value, uint8_t dataLength = 2) {
         std::vector<uint8_t> cmd = {
             0xDC, 0x02,
             static_cast<uint8_t>(regAddr >> 8),
             static_cast<uint8_t>(regAddr & ByteMasks::LOW_BYTE),
-            0x02,
-            static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value & ByteMasks::LOW_BYTE),
+            dataLength,
         };
+
+        if (dataLength >= 2) {
+            cmd.push_back(static_cast<uint8_t>(value >> 8));
+        }
+        cmd.push_back(static_cast<uint8_t>(value & ByteMasks::LOW_BYTE));
 
         uint8_t checksum = Checksums::Xor8::INITIAL;
         for (auto b : cmd) checksum ^= b;

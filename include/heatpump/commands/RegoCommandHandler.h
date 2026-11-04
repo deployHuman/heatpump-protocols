@@ -112,6 +112,14 @@ public:
         }
     }
 
+    CommunicationError writeRegister(uint16_t regAddr, uint16_t value) {
+        return writeRegoAndVerify(regAddr, value);
+    }
+
+    CommunicationError writeRegisterRaw(uint16_t regAddr, uint16_t value) {
+        return writeRegoRegister(regAddr, value);
+    }
+
 private:
     CommunicationError writeRegoRegister(uint16_t regAddr, uint16_t value) {
         std::vector<uint8_t> cmd = {

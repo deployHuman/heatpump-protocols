@@ -1,7 +1,7 @@
 #pragma once
 
 #include "heatpump/HeatPumpCommand.h"
-#include "utils/CrcCalculator.h"
+#include "utils/ModbusRtu.h"
 #include "types/Constants.h"
 
 using namespace Constants;
@@ -76,21 +76,20 @@ public:
         }
     }
 
+    CommunicationError writeRegister(uint16_t regAddr, uint16_t value) {
+        return writeModbusRegister(regAddr, value);
+    }
+
 private:
     CommunicationError writeModbusRegister(uint16_t regAddr, uint16_t value) {
-        std::vector<uint8_t> cmd = {
-            m_slaveAddress, 0x06,
-            static_cast<uint8_t>(regAddr >> 8),
-            static_cast<uint8_t>(regAddr & ByteMasks::LOW_BYTE),
-            static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value & ByteMasks::LOW_BYTE),
-        };
+        if (!m_bus) return CommunicationError{CommErrorCode::BUS_NOT_READY, "Bus not ready", 0};
 
-        uint16_t crc = Utils::crc16Modbus(cmd);
-        cmd.push_back(static_cast<uint8_t>(crc & ByteMasks::LOW_BYTE));
-        cmd.push_back(static_cast<uint8_t>(crc >> 8));
+        auto cmd = ModbusRtu::buildWriteSingleRegisterFrame(m_slaveAddress, regAddr, value);
+        auto err = m_bus->writeBytes(cmd);
+        if (!err.isOk()) return err;
 
-        return writeAndWaitAck(cmd, DEFAULT_ACK_TIMEOUT);
+        return ModbusRtu::readWriteEcho(m_bus, m_slaveAddress, 0x06, regAddr, value,
+                                        DEFAULT_ACK_TIMEOUT);
     }
 
     uint8_t m_slaveAddress = 0x01;

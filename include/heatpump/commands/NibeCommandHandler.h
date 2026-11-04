@@ -136,6 +136,25 @@ public:
         }
     }
 
+    CommunicationError writeRegister(uint8_t regAddr, uint8_t value) {
+        return writeNibeAndVerify(regAddr, value);
+    }
+
+    CommunicationError writeRegisterRaw(uint8_t regAddr, uint8_t value) {
+        return writeNibeRegister(regAddr, value);
+    }
+
+    // UNVERIFIED: 16-bit register write frame. The reference capture only
+    // contains 8-byte one-byte-register writes. Confirm the payload length on
+    // the target bridge; use writeRegister16Raw() to send a custom frame.
+    CommunicationError writeRegister16(uint16_t regAddr, uint16_t value) {
+        return writeAndVerify(buildNibeWriteCmd16(regAddr, value), regAddr, value);
+    }
+
+    CommunicationError writeRegister16Raw(uint16_t regAddr, uint16_t value) {
+        return writeAndWaitAck(buildNibeWriteCmd16(regAddr, value));
+    }
+
 private:
     CommunicationError writeNibeRegister(uint8_t regAddr, uint8_t value) {
         std::vector<uint8_t> cmd = {
@@ -160,6 +179,19 @@ private:
 
     std::vector<uint8_t> buildNibeWriteCmd(uint8_t regAddr, uint8_t value) {
         return {0x38, 0x10, 0xFF, 0x00, 0x03, 0x2B, regAddr, value};
+    }
+
+    // UNVERIFIED: little-endian 16-bit register/value extension of the
+    // 8-byte write frame. See docs/RESEARCH_JOURNAL.md before using it on
+    // hardware.
+    static std::vector<uint8_t> buildNibeWriteCmd16(uint16_t regAddr, uint16_t value) {
+        return {
+            0x38, 0x10, 0xFF, 0x00, 0x03, 0x2B,
+            static_cast<uint8_t>(regAddr & ByteMasks::LOW_BYTE),
+            static_cast<uint8_t>(regAddr >> 8),
+            static_cast<uint8_t>(value & ByteMasks::LOW_BYTE),
+            static_cast<uint8_t>(value >> 8),
+        };
     }
 
     Rc100HEmulation* m_emulation;
