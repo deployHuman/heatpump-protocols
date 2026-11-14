@@ -63,6 +63,15 @@ public:
         return m_devices[deviceIndex].writeSensor(sensorId, value);
     }
 
+    CommunicationError writeSensorByName(size_t deviceIndex, const std::string& name,
+                                          const SensorValue& value) {
+        if (deviceIndex >= m_devices.size()) {
+            return CommunicationError{CommErrorCode::DEVICE_NOT_FOUND,
+                                       "Device index out of range", 0};
+        }
+        return m_devices[deviceIndex].writeSensorByName(name, value);
+    }
+
     CommunicationError shutdownAll() {
         CommunicationError lastErr = CommunicationError::ok();
         for (auto& device : m_devices) {

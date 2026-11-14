@@ -26,6 +26,7 @@ public:
         , m_config{}
         , m_traceEnabled(false)
         , m_currentPairIndex(0)
+        , m_pairTxPos(0)
         , m_rxPos(0) {}
 
     CommunicationError init(const BusConfig& config) override {
@@ -40,6 +41,7 @@ public:
         m_rxLog.clear();
         m_rxBuffer.reset();
         m_currentPairIndex = 0;
+        m_pairTxPos = 0;
         m_rxPos = 0;
         return CommunicationError::ok();
     }
@@ -50,13 +52,14 @@ public:
 
         if (m_currentPairIndex < m_pairs.size()) {
             auto& pair = m_pairs[m_currentPairIndex];
-            size_t txIdx = m_txLog.size() - 1;
-            if (txIdx < pair.expectedTx.size() && pair.expectedTx[txIdx] != byte) {
+            if (m_pairTxPos < pair.expectedTx.size() &&
+                pair.expectedTx[m_pairTxPos] != byte) {
                 return CommunicationError{CommErrorCode::PROTOCOL_MISMATCH,
-                    "TX mismatch at byte " + std::to_string(txIdx) +
-                    ": expected 0x" + hexStr(pair.expectedTx[txIdx]) +
+                    "TX mismatch at byte " + std::to_string(m_pairTxPos) +
+                    ": expected 0x" + hexStr(pair.expectedTx[m_pairTxPos]) +
                     " got 0x" + hexStr(byte), 0};
             }
+            m_pairTxPos++;
         }
 
         return CommunicationError::ok();
@@ -80,13 +83,14 @@ public:
 
             auto& pair = m_pairs[m_currentPairIndex];
 
-            if (m_txLog.size() < pair.expectedTx.size()) {
+            if (m_pairTxPos < pair.expectedTx.size()) {
                 return CommunicationError::timeout("Mock: not all TX bytes sent yet");
             }
 
             m_rxBuffer = pair.simulatedRx;
             m_rxPos = 0;
             m_currentPairIndex++;
+            m_pairTxPos = 0;
         }
 
         if (m_rxBuffer.has_value() && m_rxPos < m_rxBuffer->size()) {
@@ -140,6 +144,7 @@ public:
     void loadScenario(const std::vector<RxTxPair>& pairs) {
         m_pairs = pairs;
         m_currentPairIndex = 0;
+        m_pairTxPos = 0;
         m_rxPos = 0;
         m_txLog.clear();
         m_rxLog.clear();
@@ -172,6 +177,7 @@ public:
 
     void resetState() {
         m_currentPairIndex = 0;
+        m_pairTxPos = 0;
         m_rxPos = 0;
         m_txLog.clear();
         m_rxLog.clear();
@@ -218,5 +224,6 @@ private:
     std::vector<RxTxPair> m_pairs;
     std::optional<std::vector<uint8_t>> m_rxBuffer;
     size_t m_currentPairIndex;
+    size_t m_pairTxPos;
     size_t m_rxPos;
 };

@@ -146,6 +146,16 @@ public:
         return waitForWriteAck(m_writeTimeout);
     }
 
+    CommunicationError writeValueByName(const std::string& name,
+                                         const SensorValue& value) override {
+        const auto* mapping = m_sensorCatalog.getByName(name);
+        if (!mapping) {
+            return CommunicationError{CommErrorCode::DEVICE_NOT_FOUND,
+                                       "Unknown sensor name: " + name, 0};
+        }
+        return writeValue(mapping->sensorId, value);
+    }
+
     CommunicationError sendCommand(const std::string& command, std::string& response) {
         if (!isOperational()) return makeNotReadyError();
         return doSendCommand(command, response);

@@ -35,6 +35,11 @@ class IHeatPumpWriter {
 public:
     virtual ~IHeatPumpWriter() = default;
     virtual CommunicationError writeValue(uint16_t sensorId, const SensorValue& value) = 0;
+    virtual CommunicationError writeValueByName(const std::string& /*name*/,
+                                                 const SensorValue& /*value*/) {
+        return CommunicationError{CommErrorCode::WRITE_REJECTED,
+                                   "Write by sensor name is not supported", 0};
+    }
 };
 
 class IHeatPumpCommander {

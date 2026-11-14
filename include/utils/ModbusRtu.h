@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 #include "comm/abstract/ICommunicationBus.h"
@@ -53,6 +54,69 @@ inline std::vector<uint8_t> buildReadRequestFrame(uint8_t slave, uint8_t functio
     frame.push_back(static_cast<uint8_t>(crc & 0xFF));
     frame.push_back(static_cast<uint8_t>(crc >> 8));
     return frame;
+}
+
+inline std::vector<uint8_t> buildWriteMultipleRegistersFrame(
+    uint8_t slave, uint16_t startAddress, std::span<const uint16_t> values) {
+    std::vector<uint8_t> frame = {
+        slave, 0x10,
+        static_cast<uint8_t>(startAddress >> 8),
+        static_cast<uint8_t>(startAddress & 0xFF),
+        static_cast<uint8_t>(values.size() >> 8),
+        static_cast<uint8_t>(values.size() & 0xFF),
+        static_cast<uint8_t>(values.size() * 2),
+    };
+    for (auto value : values) {
+        frame.push_back(static_cast<uint8_t>(value >> 8));
+        frame.push_back(static_cast<uint8_t>(value & 0xFF));
+    }
+    uint16_t crc = Utils::crc16Modbus(frame);
+    frame.push_back(static_cast<uint8_t>(crc & 0xFF));
+    frame.push_back(static_cast<uint8_t>(crc >> 8));
+    return frame;
+}
+
+inline CommunicationError readWriteMultipleRegistersEcho(
+    ICommunicationBus* bus, uint8_t slave, uint16_t startAddress, uint16_t quantity,
+    std::chrono::milliseconds timeout) {
+    if (!bus) return CommunicationError{CommErrorCode::BUS_NOT_READY, "Bus not ready", 0};
+
+    std::vector<uint8_t> response;
+    response.reserve(8);
+    for (size_t i = 0; i < 8; ++i) {
+        uint8_t byte = 0;
+        auto err = bus->readByte(byte, timeout);
+        if (!err.isOk()) return err;
+        response.push_back(byte);
+
+        if (response.size() == 2 && (response[1] & 0x80) != 0) {
+            uint8_t exceptionCode = 0;
+            auto exceptionErr = bus->readByte(exceptionCode, timeout);
+            if (!exceptionErr.isOk()) return exceptionErr;
+            bus->drain();
+            return CommunicationError{CommErrorCode::WRITE_REJECTED,
+                                       "Modbus exception " + std::to_string(exceptionCode), 0};
+        }
+    }
+
+    if (response[0] != slave || response[1] != 0x10 ||
+        response[2] != static_cast<uint8_t>(startAddress >> 8) ||
+        response[3] != static_cast<uint8_t>(startAddress & 0xFF) ||
+        response[4] != static_cast<uint8_t>(quantity >> 8) ||
+        response[5] != static_cast<uint8_t>(quantity & 0xFF)) {
+        return CommunicationError{CommErrorCode::PROTOCOL_MISMATCH,
+                                   "Modbus write-multiple echo does not match request", 0};
+    }
+
+    uint16_t receivedCrc = static_cast<uint16_t>(response[6]) |
+                           (static_cast<uint16_t>(response[7]) << 8);
+    std::vector<uint8_t> withoutCrc(response.begin(), response.begin() + 6);
+    if (Utils::crc16Modbus(withoutCrc) != receivedCrc) {
+        return CommunicationError{CommErrorCode::CHECKSUM_MISMATCH,
+                                   "Modbus response CRC mismatch", 0};
+    }
+
+    return CommunicationError::ok();
 }
 
 inline CommunicationError readWriteEcho(ICommunicationBus* bus, uint8_t slave, uint8_t function,

@@ -36,13 +36,14 @@ Working today:
 
 - All protocol classes and command handlers compile under C++20.
 - `HeatPumpManager` can create a device, detect a protocol, and poll sensors.
-- `registerAllProtocols()` registers the IVT Rego, NIBE, Bosch EMS, Thermia
-  (Rego-style and Genesis), and generic probe protocols.
+- `registerAllProtocols()` registers the IVT Rego, NIBE EB100/Styr2002,
+  NIBE S/F-series Modbus, Bosch EMS, Thermia (Rego-style and Genesis), and
+  generic probe protocols.
 - The Thermia Atlas/Calibra Genesis protocol has a focused sensor catalog,
   Modbus input/holding-register reads, and writable holding-register setpoints.
-- `HeatPumpManager::writeSensor()` works for protocols with writable sensor
-  mappings; the protocol base implements `IHeatPumpWriter` and
-  `IHeatPumpCommander`.
+- `HeatPumpManager::writeSensor()` and `writeSensorByName()` work for protocols
+  with writable sensor mappings; the protocol base implements `IHeatPumpWriter`
+  and `IHeatPumpCommander`.
 - Opt-in extended command handlers cover the Rego 600/800/1000 and NIBE EB100
   bridge register maps and the official Thermia Mega/Genesis Modbus map.
 - `docs/RESEARCH_JOURNAL.md` is the single place for external source links,

@@ -70,6 +70,13 @@ public:
         return writer->writeValue(id, value);
     }
 
+    CommunicationError writeSensorByName(const std::string& name, const SensorValue& value) {
+        auto* writer = dynamic_cast<IHeatPumpWriter*>(m_protocol.get());
+        if (!writer) return CommunicationError{CommErrorCode::WRITE_REJECTED,
+                                                "Protocol does not support writes", 0};
+        return writer->writeValueByName(name, value);
+    }
+
     CommunicationError sendCommand(const std::string& cmd, std::string& response) {
         auto* commander = dynamic_cast<IHeatPumpCommander*>(m_protocol.get());
         if (!commander) return CommunicationError{CommErrorCode::WRITE_REJECTED,

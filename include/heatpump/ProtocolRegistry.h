@@ -9,6 +9,7 @@
 #include "comm/protocol/ivt/IvtRego600Protocol.h"
 #include "comm/protocol/ivt/IvtRego800Protocol.h"
 #include "comm/protocol/nibe/NibeEB100Protocol.h"
+#include "comm/protocol/nibe/NibeModbusProtocol.h"
 #include "comm/protocol/nibe/NibeStyr2002Protocol.h"
 #include "comm/protocol/thermia/ThermiaGenesisProtocol.h"
 #include "comm/protocol/thermia/ThermiaProtocol.h"
@@ -45,6 +46,16 @@ inline void registerAllProtocols(HeatPumpDetector& detector) {
         HeatPumpProtocol::NIBE_STYR2002,
         [] { return std::make_unique<NibeStyr2002Protocol>(); },
         "NIBE Styr2002");
+
+    detector.registerProtocol(
+        HeatPumpProtocol::NIBE_S_MODBUS,
+        [] { return std::make_unique<NibeSModbusProtocol>(); },
+        "NIBE S-series Modbus");
+
+    detector.registerProtocol(
+        HeatPumpProtocol::NIBE_F_MODBUS,
+        [] { return std::make_unique<NibeFModbusProtocol>(); },
+        "NIBE F-series Modbus");
 
     detector.registerProtocol(
         HeatPumpProtocol::BOSCH_EMS_PROCONTROL,

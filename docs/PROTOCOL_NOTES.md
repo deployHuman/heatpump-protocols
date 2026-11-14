@@ -84,7 +84,7 @@ command handlers in `include/heatpump/commands/`.
   pump-raw `+50` value. See `docs/RESEARCH_JOURNAL.md` for the verification
   steps.
 
-## NIBE EB100 / Styr2002
+## NIBE EB100 / Styr2002 / S-F Modbus
 
 - Writes use `38 10 FF 00 03 2B reg value` and do not carry an XOR byte.
 - Boost is two writes: register `0x09` gets the hours, then register `0xD1`
@@ -99,6 +99,23 @@ command handlers in `include/heatpump/commands/`.
   that expects a different length. Its temperature encoding defaults to the
   documented bridge value (`tempC * 10`); switch to `PumpRawOffset50` only after
   confirming one read.
+
+### NIBE S-series / F-series Modbus
+
+- NIBE Modbus uses five-digit coil addresses: `3xxxx` are input registers
+  (function `0x04`), `4xxxx` are holding registers (function `0x03`). Subtract
+  1 from the last four digits for the wire address. For example, `40207` is
+  holding register `206`.
+- Values are plain `raw / 10` with no 50-degree offset. Do not use the
+  `BridgeTemperatureEncoding` setting for this map.
+- Writes use function `0x10` (write multiple registers) and validate the
+  8-byte Modbus echo. NIBE F-series documentation prefers FC10.
+- S-series and F-series use different addresses for the same function. The
+  protocol detects the series from the priority and supply-temperature
+  registers, but the full model-specific map should be selected by the user.
+- 32-bit values are not implemented yet. If added, S-series Modbus TCP needs
+  low-word-first reads and high-word-first writes; Modbus RTU uses the same word
+  order in both directions.
 
 ## Bosch EMS / ProControl
 

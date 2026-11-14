@@ -52,6 +52,10 @@ journal instead of linking externally.
 | openHAB RegoHeatPump binding | Rego 6xx serial framing and Husdata bridge support; Rego 800/1000 CAN appears in the supported-model table but bitrate is not specified | https://www.openhab.org/addons/bindings/regoheatpump/ |
 | openHAB Rego 6xx source | 9-byte `0x81` serial frames and register handling | https://github.com/openhab/openhab-addons/tree/main/bundles/org.openhab.binding.regoheatpump |
 | openHAB NibeHeatpump binding | NIBE register model and UDP/serial gateway behaviour | https://www.openhab.org/addons/bindings/nibeheatpump/ |
+| Home Assistant nibe_heatpump integration | Modbus and NibeGW entity mappings, writable coils | https://github.com/home-assistant/core/tree/dev/homeassistant/components/nibe_heatpump |
+| `nibe` Python library | Model-specific coil database, Modbus/NibeGW transports, word swap | https://github.com/yozik04/nibe |
+| `nibe` coil groups | Common coil addresses for F-series and S-series | https://github.com/yozik04/nibe/blob/master/nibe/coil_groups.py |
+| `nibe` model data | Per-model register metadata (factor, signedness, writability) | https://github.com/yozik04/nibe/tree/master/nibe/data |
 | EMS-ESP heat pump device | EMS telegram types and payload layouts | https://github.com/emsesp/EMS-ESP32/blob/dev/src/devices/heatpump.cpp |
 | EMS-ESP thermostat device | RC100H EMS telegrams `0x42B` and `0x47B` | https://github.com/emsesp/EMS-ESP32/blob/dev/src/devices/thermostat.cpp |
 | Thermia Modbus protocol | Official Mega/Genesis coil and holding-register map | https://www.thermia.fi/media/70526/protocol_doc-00079973.pdf |
@@ -248,6 +252,149 @@ the register order used by `NibeEB100Protocol::buildReadCommand()`. It has not
 been verified against an EB100 capture. Use `writeRegister16Raw()` if a bridge
 expects a different payload length, and record the capture in this journal.
 
+## NIBE Modbus / NibeGW (Home Assistant integration)
+
+The Home Assistant `nibe_heatpump` integration supports two local transports:
+
+- **Modbus RTU/TCP** using the `nibe` Python library and a model-specific coil
+  database.
+- **NibeGW** over UDP ports 9999/10000.
+
+The library and model data are the most useful public reference because they
+include the factor, signedness and writability for each register, and they
+cover both F-series and S-series pumps.
+
+### Coil address encoding
+
+NIBE Modbus addresses in the `nibe` library are five digits:
+
+```text
+<entity type><1-based register number>
+```
+
+| First digit | Modbus entity | Read function | Write function |
+| --- | --- | --- | --- |
+| `0` | coil | `0x01` | `0x05` |
+| `1` | discrete input | `0x02` | - |
+| `3` | input register | `0x04` | - |
+| `4` | holding register | `0x03` | `0x10` |
+
+The wire address is `(coilAddress % 10000) - 1`. For example, `40207` is
+holding register `206` (`0x00CE`), and `31029` is input register `1028`
+(`0x0404`).
+
+### Value encoding
+
+NIBE Modbus values use `value / 10` for temperature and percent registers.
+There is **no +50 degree offset** in this map. A room setpoint of 21.5 C is
+raw `215`, not `715`. This is different from the Husdata H1/H66 maps used by
+`NibeEb100ExtendedCommandHandler`.
+
+The addresses below are the ones used by the `nibe` library's Modbus
+transport. NIBE's official S-series Modbus TCP document describes parameter
+IDs instead; do not assume the two numbering schemes are interchangeable.
+The Home Assistant integration uses the `nibe` library map.
+
+### S-series registers implemented
+
+Source: `nibe/data/s1155_s1255.json` and `nibe/coil_groups.py`.
+
+| Coil address | Wire address | Meaning | Function | Factor | Writable |
+| --- | --- | --- | --- | --- | --- |
+| `30038` | `37` | Average outdoor temperature (BT1) | `0x04` | 10 | no |
+| `30006` | `5` | Supply line (BT2) | `0x04` | 10 | no |
+| `30008` | `7` | Return line (BT3) | `0x04` | 10 | no |
+| `30010` | `9` | Hot water charging (BT6) | `0x04` | 10 | no |
+| `30027` | `26` | Room temperature S1 | `0x04` | 10 | no |
+| `31018` | `1017` | Calculated supply S1 | `0x04` | 10 | no |
+| `31029` | `1028` | Priority | `0x04` | 1 | no |
+| `31034` | `1033` | Shunt mode S1 | `0x04` | 1 | no |
+| `31039` | `1038` | Hot water mode | `0x04` | 1 | no |
+| `31976` | `1975` | Alarm number | `0x04` | 1 | no |
+| `40207` | `206` | Room setpoint heat S1 | `0x03` | 10 | yes |
+| `40989` | `988` | Room setpoint cool S1 | `0x03` | 10 | yes |
+| `40203` | `202` | Use room sensor S1 | `0x03` | 1 | yes |
+| `40171` | `170` | Cooling with room sensors | `0x03` | 10 | yes |
+| `40027` | `26` | Heating curve S1 | `0x03` | 1 | yes |
+| `40031` | `30` | Heating offset S1 | `0x03` | 1 | yes |
+| `40035` | `34` | Min supply S1 | `0x03` | 10 | yes |
+| `40039` | `38` | Max supply S1 | `0x03` | 10 | yes |
+| `40211` | `210` | Room sensor factor S1 | `0x03` | 10 | yes |
+| `40061` | `60` | Hot water start low | `0x03` | 10 | yes |
+| `40060` | `59` | Hot water start normal | `0x03` | 10 | yes |
+| `40059` | `58` | Hot water start high | `0x03` | 10 | yes |
+| `40065` | `64` | Hot water stop low | `0x03` | 10 | yes |
+| `40064` | `63` | Hot water stop normal | `0x03` | 10 | yes |
+| `40063` | `62` | Hot water stop high | `0x03` | 10 | yes |
+| `40023` | `22` | Reset alarm | `0x03` | 1 | yes |
+
+### F-series registers implemented
+
+Source: `nibe/data/f1155_f1255.json` and `nibe/coil_groups.py`.
+
+| Coil address | Wire address | Meaning | Function | Factor | Writable |
+| --- | --- | --- | --- | --- | --- |
+| `40067` | `66` | Outdoor temperature | `0x03` | 10 | no |
+| `40008` | `7` | Supply line | `0x03` | 10 | no |
+| `40012` | `11` | Return line | `0x03` | 10 | no |
+| `40033` | `32` | Room temperature S1 | `0x03` | 10 | no |
+| `43009` | `3008` | Calculated supply S1 | `0x03` | 10 | no |
+| `43086` | `3085` | Priority | `0x03` | 1 | no |
+| `43096` | `3095` | Shunt mode S1 | `0x03` | 1 | no |
+| `47041` | `7040` | Hot water mode | `0x03` | 1 | no |
+| `45001` | `5000` | Alarm number | `0x03` | 1 | no |
+| `47398` | `7397` | Room setpoint heat S1 | `0x03` | 10 | yes |
+| `48785` | `8784` | Room setpoint cool S1 | `0x03` | 10 | yes |
+| `47394` | `7393` | Use room sensor S1 | `0x03` | 1 | yes |
+| `47340` | `7339` | Cooling with room sensors | `0x03` | 10 | yes |
+| `47007` | `7006` | Heating curve S1 | `0x03` | 1 | yes |
+| `47011` | `7010` | Heating offset S1 | `0x03` | 1 | yes |
+| `47015` | `7014` | Min supply S1 | `0x03` | 10 | yes |
+| `47019` | `7018` | Max supply S1 | `0x03` | 10 | yes |
+| `47402` | `7401` | Room sensor factor S1 | `0x03` | 10 | yes |
+| `47045` | `7044` | Hot water start economy | `0x03` | 10 | yes |
+| `47044` | `7043` | Hot water start normal | `0x03` | 10 | yes |
+| `47043` | `7042` | Hot water start luxury | `0x03` | 10 | yes |
+| `47049` | `7048` | Hot water stop economy | `0x03` | 10 | yes |
+| `47048` | `7047` | Hot water stop normal | `0x03` | 10 | yes |
+| `47047` | `7046` | Hot water stop luxury | `0x03` | 10 | yes |
+| `48132` | `8131` | Temporary lux | `0x03` | 1 | yes |
+| `45171` | `5170` | Reset alarm | `0x03` | 1 | yes |
+
+### Implementation
+
+`NibeSModbusProtocol` and `NibeFModbusProtocol` (in
+`include/comm/protocol/nibe/NibeModbusProtocol.h`) implement a focused subset
+of the tables above. They use Modbus RTU over the existing byte-oriented
+`ICommunicationBus`, with function `0x04` for input registers, `0x03` for
+holding registers and `0x10` (write multiple registers) for writes. This
+matches the `nibe` library and NIBE's F-series preference for FC10.
+
+Auto-detection reads the priority and supply-temperature registers and checks
+the priority value (`10`, `20`, `30`, `40` or `60`) plus a plausible supply
+temperature. The full model-specific map still needs the model selected by the
+user, as in the Home Assistant config flow.
+
+Writable sensors are available through `writeValue()` and the new
+`writeValueByName()` API. Examples: `room_setpoint_heat_s1`,
+`room_setpoint_cool_s1`, `use_room_sensor_s1`, `heating_curve_s1`,
+`heating_offset_s1`, `min_supply_s1`, `max_supply_s1`, `temporary_lux` and
+`alarm_reset`.
+
+### Word swap and 32-bit values
+
+The `nibe` library notes that S-series pumps connected over Modbus TCP return
+32-bit registers with the low word first but expect the high word first when
+written. Modbus RTU uses the same word order in both directions. The focused
+catalog currently uses 16-bit registers only, so this does not affect it. A
+future 32-bit extension must implement the TCP word-swap rule.
+
+### NibeGW status
+
+NibeGW is a UDP text protocol on ports 9999/10000. It does not fit the current
+byte-oriented `ICommunicationBus`; implementing it needs a datagram transport
+and a new device/protocol layer. It remains a backlog item.
+
 ## Thermia Mega/Genesis commands added
 
 Source: Thermia Modbus protocol document `ACME01UG0502`. The table has two
@@ -426,7 +573,7 @@ All links in this table returned HTTP 200 on 2026-11-04.
 - Daikin Altherma X10A is **9600 8E1**, not 2400 8E2. The 2400 8E2 S21 port is for air-to-air units.
 - Panasonic Aquarea CN-CNT uses **0x71 poll/response and 0xF1 control** in HeishaMon. The `0x70/0xF0` pair belongs to a different air-to-air CN-CNT variant.
 - Viessmann Optolink is **4800 8E2**, not 8N1. Vitocal 250-A/150-A are CAN/Open3E; Vitocal 300-A/WO1C are Optolink.
-- NIBE S-series Modbus TCP uses **parameter IDs**, not 4xxxx offsets. F-series MODBUS 40 uses 4xxxx and prefers FC10 for writes.
+- NIBE S-series official Modbus TCP uses **parameter IDs**, not 4xxxx offsets; the `nibe` library maps its S-series coils to 3xxxx/4xxxx. F-series MODBUS 40 uses 4xxxx and prefers FC10 for writes.
 - NIBE F2120/S2125 are outdoor units; Modbus is exposed by the controller, not the outdoor unit.
 - Mitsubishi Ecodan CN105 is **2400 8E1**; 9600 appears only in some MELCloud/CN105 contexts.
 - Stiebel/Tecalor is **Elster CAN** at 20/50 kbit/s, not Modbus. WPL-A .2 has no public CAN map.

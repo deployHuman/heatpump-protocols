@@ -136,6 +136,49 @@ Styr2002 mode value and optional file-backed mode persistence.
 NIBE write acknowledgments are read as a single byte. A response byte of `W`
 is treated as accepted; the helper otherwise reports success after the write.
 
+### NIBE S-series / F-series Modbus
+
+The NIBE Modbus map uses five-digit coil addresses. The first digit selects the
+Modbus entity type and the last four digits are the 1-based register number.
+For example, `40207` is holding register `206`, and `31029` is input register
+`1028`.
+
+| Function | Used for |
+|---|---|
+| `0x04` | read input registers (`3xxxx`) |
+| `0x03` | read holding registers (`4xxxx`) |
+| `0x10` | write holding registers (FC10 preferred by NIBE) |
+
+`NibeSModbusProtocol` and `NibeFModbusProtocol` expose writable sensors such as:
+
+| Sensor name | Meaning |
+|---|---|
+| `room_setpoint_heat_s1` | Heating room setpoint, climate system 1 |
+| `room_setpoint_cool_s1` | Cooling room setpoint, climate system 1 |
+| `use_room_sensor_s1` | Use room sensor, climate system 1 |
+| `cooling_with_room_sensors` | Cooling with room sensors |
+| `heating_curve_s1` | Heating curve, climate system 1 |
+| `heating_offset_s1` | Heating curve offset, climate system 1 |
+| `min_supply_s1` / `max_supply_s1` | Supply temperature limits |
+| `room_sensor_factor_s1` | Room sensor influence |
+| `temporary_lux` | Temporary hot water boost (F-series) |
+| `alarm_reset` | Alarm reset |
+
+Write by name through the protocol, device, or manager:
+
+```cpp
+SensorValue setpoint;
+setpoint.type = SensorType::TEMPERATURE;
+setpoint.unit = SensorUnit::CELSIUS;
+setpoint.rawValue = 21.5f;
+
+manager.writeSensorByName(0, "room_setpoint_heat_s1", setpoint);
+```
+
+NIBE Modbus values use plain `raw / 10` with no 50-degree offset. This is
+different from the Husdata EB100 map above. See `docs/RESEARCH_JOURNAL.md` for
+the full register table and the S/F model differences.
+
 ## Bosch EMS / ProControl
 
 Write request:

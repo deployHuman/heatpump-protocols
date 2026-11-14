@@ -91,6 +91,7 @@ namespace Nibe {
 
     using namespace std::chrono_literals;
     constexpr auto     READ_TIMEOUT = std::chrono::milliseconds(3000);
+    constexpr auto     WRITE_TIMEOUT = std::chrono::milliseconds(3000);
 
     constexpr float    TEMP_SCALE   = 0.1f;
     constexpr float    TEMP_OFFSET  = -50.0f;

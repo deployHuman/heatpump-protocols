@@ -15,6 +15,8 @@ enum class HeatPumpBrand : uint8_t {
 enum class HeatPumpProtocol : uint8_t {
     NIBE_EB100,
     NIBE_STYR2002,
+    NIBE_S_MODBUS,
+    NIBE_F_MODBUS,
     IVT_REGO800,
     IVT_REGO600,
     IVT_REGO1000,

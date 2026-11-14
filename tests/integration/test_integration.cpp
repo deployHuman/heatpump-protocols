@@ -16,6 +16,7 @@
 #include "heatpump/commands/Rego1000ExtendedCommandHandler.h"
 #include "heatpump/commands/ThermiaCommandHandler.h"
 #include "heatpump/commands/ThermiaGenesisCommandHandler.h"
+#include "comm/protocol/nibe/NibeModbusProtocol.h"
 #include "heatpump/HeatPumpManager.h"
 #include "heatpump/ProtocolRegistry.h"
 #include "types/SensorValue.h"
@@ -313,6 +314,22 @@ static std::vector<uint8_t> modbusReadResponse(uint8_t slave, uint8_t function,
     return frame;
 }
 
+static std::vector<uint8_t> modbusWriteMultipleResponse(uint8_t slave,
+                                                        uint16_t address,
+                                                        uint16_t quantity) {
+    std::vector<uint8_t> frame = {
+        slave, 0x10,
+        static_cast<uint8_t>(address >> 8),
+        static_cast<uint8_t>(address & 0xFF),
+        static_cast<uint8_t>(quantity >> 8),
+        static_cast<uint8_t>(quantity & 0xFF),
+    };
+    uint16_t crc = Utils::crc16Modbus(frame);
+    frame.push_back(static_cast<uint8_t>(crc & 0xFF));
+    frame.push_back(static_cast<uint8_t>(crc >> 8));
+    return frame;
+}
+
 static bool initMockBus(MockCommunicationBus& bus) {
     BusConfig config{};
     config.type = BusType::UART;
@@ -499,6 +516,115 @@ void test_thermia_genesis_frames() {
     PASS();
 }
 
+void test_nibe_s_modbus_protocol() {
+    TEST("NIBE S-series Modbus detection, read and write");
+
+    MockCommunicationBus bus;
+    ASSERT_TRUE(initMockBus(bus), "Mock bus init");
+
+    NibeSModbusProtocol protocol;
+    auto err = protocol.initialize(&bus);
+    ASSERT_TRUE(err.isOk(), "Protocol init");
+
+    auto priorityRequest = modbusReadRequest(0x01, 0x04, 1028, 1);
+    auto priorityResponse = modbusReadResponse(0x01, 0x04, {0x00, 0x1E});
+    auto supplyRequest = modbusReadRequest(0x01, 0x04, 5, 1);
+    auto supplyResponse = modbusReadResponse(0x01, 0x04, {0x01, 0x2C});
+    bus.loadScenario({
+        {priorityRequest, priorityResponse, "priority"},
+        {supplyRequest, supplyResponse, "supply temperature"},
+    });
+
+    HeatPumpModelInfo info;
+    err = protocol.detectModel(info);
+    ASSERT_TRUE(err.isOk(), "Detection");
+    ASSERT_TRUE(info.protocol == HeatPumpProtocol::NIBE_S_MODBUS, "Protocol type");
+    ASSERT_TRUE(info.brand == HeatPumpBrand::NIBE, "Brand");
+    ASSERT_TRUE(info.writeEnabled, "Writes enabled");
+
+    auto outdoorRequest = modbusReadRequest(0x01, 0x04, 37, 1);
+    auto outdoorResponse = modbusReadResponse(0x01, 0x04, {0x00, 0xC8});
+    bus.loadScenario({{outdoorRequest, outdoorResponse, "outdoor temperature"}});
+
+    SensorValue value;
+    err = protocol.readSensor(0, value);
+    ASSERT_TRUE(err.isOk(), "Read outdoor temperature");
+    ASSERT_TRUE(std::fabs(value.asFloat() - 20.0f) < 0.01f, "Outdoor temperature value");
+
+    auto setpointRequest = modbusReadRequest(0x01, 0x03, 206, 1);
+    auto setpointResponse = modbusReadResponse(0x01, 0x03, {0x00, 0xD2});
+    bus.loadScenario({{setpointRequest, setpointResponse, "room setpoint"}});
+
+    err = protocol.readSensor(10, value);
+    ASSERT_TRUE(err.isOk(), "Read room setpoint");
+    ASSERT_TRUE(std::fabs(value.asFloat() - 21.0f) < 0.01f, "Room setpoint value");
+
+    auto writeRequest = ModbusRtu::buildWriteMultipleRegistersFrame(
+        0x01, 206, std::vector<uint16_t>{215});
+    auto writeResponse = modbusWriteMultipleResponse(0x01, 206, 1);
+    bus.loadScenario({{writeRequest, writeResponse, "room setpoint write"}});
+
+    SensorValue setpoint;
+    setpoint.type = SensorType::TEMPERATURE;
+    setpoint.unit = SensorUnit::CELSIUS;
+    setpoint.rawValue = 21.5f;
+    err = protocol.writeValueByName("room_setpoint_heat_s1", setpoint);
+    ASSERT_TRUE(err.isOk(), "Write room setpoint by name");
+    ASSERT_TRUE(bus.getTxLog() == writeRequest, "Room setpoint frame");
+
+    PASS();
+}
+
+void test_nibe_f_modbus_protocol() {
+    TEST("NIBE F-series Modbus detection, read and write");
+
+    MockCommunicationBus bus;
+    ASSERT_TRUE(initMockBus(bus), "Mock bus init");
+
+    NibeFModbusProtocol protocol;
+    auto err = protocol.initialize(&bus);
+    ASSERT_TRUE(err.isOk(), "Protocol init");
+
+    auto priorityRequest = modbusReadRequest(0x01, 0x03, 3085, 1);
+    auto priorityResponse = modbusReadResponse(0x01, 0x03, {0x00, 0x1E});
+    auto supplyRequest = modbusReadRequest(0x01, 0x03, 7, 1);
+    auto supplyResponse = modbusReadResponse(0x01, 0x03, {0x01, 0x2C});
+    bus.loadScenario({
+        {priorityRequest, priorityResponse, "priority"},
+        {supplyRequest, supplyResponse, "supply temperature"},
+    });
+
+    HeatPumpModelInfo info;
+    err = protocol.detectModel(info);
+    ASSERT_TRUE(err.isOk(), "Detection");
+    ASSERT_TRUE(info.protocol == HeatPumpProtocol::NIBE_F_MODBUS, "Protocol type");
+    ASSERT_TRUE(info.brand == HeatPumpBrand::NIBE, "Brand");
+
+    auto setpointRequest = modbusReadRequest(0x01, 0x03, 7397, 1);
+    auto setpointResponse = modbusReadResponse(0x01, 0x03, {0x00, 0xD2});
+    bus.loadScenario({{setpointRequest, setpointResponse, "room setpoint"}});
+
+    SensorValue value;
+    err = protocol.readSensor(9, value);
+    ASSERT_TRUE(err.isOk(), "Read room setpoint");
+    ASSERT_TRUE(std::fabs(value.asFloat() - 21.0f) < 0.01f, "Room setpoint value");
+
+    auto writeRequest = ModbusRtu::buildWriteMultipleRegistersFrame(
+        0x01, 7397, std::vector<uint16_t>{220});
+    auto writeResponse = modbusWriteMultipleResponse(0x01, 7397, 1);
+    bus.loadScenario({{writeRequest, writeResponse, "room setpoint write"}});
+
+    SensorValue setpoint;
+    setpoint.type = SensorType::TEMPERATURE;
+    setpoint.unit = SensorUnit::CELSIUS;
+    setpoint.rawValue = 22.0f;
+    err = protocol.writeValue(9, setpoint);
+    ASSERT_TRUE(err.isOk(), "Write room setpoint");
+    ASSERT_TRUE(bus.getTxLog() == writeRequest, "Room setpoint frame");
+
+    PASS();
+}
+
 void test_thermia_default_modbus_echo() {
     TEST("Thermia default handler validates Modbus echo");
 
@@ -583,7 +709,7 @@ void test_protocol_registry() {
 
     HeatPumpDetector detector;
     registerAllProtocols(detector);
-    ASSERT_EQ(detector.count(), 10, "Registered protocol count");
+    ASSERT_EQ(detector.count(), 12, "Registered protocol count");
 
     PASS();
 }
@@ -649,6 +775,8 @@ int main() {
     test_rego800_extended_frames();
     test_rego1000_extended_frames();
     test_nibe_eb100_extended_frames();
+    test_nibe_s_modbus_protocol();
+    test_nibe_f_modbus_protocol();
     test_thermia_default_modbus_echo();
     test_protocol_registry();
     test_thermia_genesis_protocol();

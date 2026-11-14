@@ -22,6 +22,8 @@ into the protocol layer.
 | IVT / Regin | Rego 5200 | UART | `IVT_REGO5200` |
 | NIBE | EB100 | UART | `NIBE_EB100` |
 | NIBE | Styr2002 | UART | `NIBE_STYR2002` |
+| NIBE | S-series (Modbus) | Modbus RTU | `NIBE_S_MODBUS` |
+| NIBE | F-series (Modbus) | Modbus RTU | `NIBE_F_MODBUS` |
 | Bosch / IVT | EMS / ProControl | UART | `BOSCH_EMS_PROCONTROL` |
 | Thermia | Atlas / Calibra / Calibra E / Calibra Cool / Calibra RXT / Diplomat Inverter | Modbus RTU | `THERMIA_GENESIS` |
 | Thermia | Diplomat / Villa Classic (Rego-style map) | Modbus RTU | `THERMIA_DIPLOMAT` |
@@ -41,6 +43,7 @@ Write support depends on the heat pump model and configuration. Check
 - Command handlers for boost, stop, holiday mode, electric heater, heating and
   hot-water setpoints, operating mode, fan speed, power limit, external ports,
   alarm reset, and timed register writes.
+- Write-by-name support for any writable sensor in a catalog.
 - RC100H CAN thermostat emulation with pairing, room temperature, humidity, and
   dial range control.
 - Opt-in extended command handlers for bridge register maps (Rego 600,
@@ -48,6 +51,8 @@ Write support depends on the heat pump model and configuration. Check
   Modbus map.
 - Full Thermia Atlas/Calibra Genesis Modbus protocol with a focused sensor
   catalog and writable holding-register setpoints.
+- NIBE S-series and F-series Modbus protocol with a focused telemetry and
+  writable-setpoint catalog.
 - Header-only: no compiled library artifact is required.
 
 ## Research notes
